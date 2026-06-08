@@ -217,7 +217,7 @@ a{color:var(--gold)}
       <button onclick="changeYear(-1)">«</button><button onclick="changeMonth(-1)">‹</button>
       <div class="mnav-lbl" id="curMonth"></div>
       <button onclick="changeMonth(1)">›</button><button onclick="changeYear(1)">»</button>
-      <button class="btn primary sm" onclick="openModalForDate(todayStr())">+ 추가</button>
+      <button class="btn primary sm" onclick="openModalForDate(S.selectedDate||todayStr())">+ 추가</button>
     </div>
     <div class="cal-wrap">
       <div class="cal-head-row"><div class="cal-dow">일</div><div class="cal-dow">월</div><div class="cal-dow">화</div><div class="cal-dow">수</div><div class="cal-dow">목</div><div class="cal-dow">금</div><div class="cal-dow">토</div></div>
@@ -323,7 +323,7 @@ a{color:var(--gold)}
       <button class="type-btn" id="tb-tf" onclick="setType('transfer')">이체</button>
       <button class="type-btn" id="tb-vl" onclick="setType('valuation')">평가</button>
     </div>
-    <div class="mf-row"><label>날짜</label><input type="date" id="m-date"></div>
+    <div class="mf-row"><label>날짜 <span style="color:var(--gold)">(여기를 바꾸면 다른 날짜로 입력됩니다)</span></label><input type="date" id="m-date" onchange="onDateChange()"></div>
     <div id="fld-cat" class="mf-row"><label>분류</label><select id="m-cat"></select></div>
     <div id="fld-desc" class="mf-row"><label>내용</label><input type="text" id="m-desc" placeholder="예: 마트 장보기"></div>
     <div id="fld-pay" class="mf-row"><label>결제수단</label><select id="m-pay" onchange="onPayChange()"><option value="cash">현금/체크</option><option value="card_lump">카드 일시불</option><option value="card_install">카드 할부</option></select></div>
@@ -422,6 +422,13 @@ function closeConfirm(){g('confirm-modal').classList.add('hidden');_confirmCb=nu
 g('confirm-yes').onclick=function(){const cb=_confirmCb;closeConfirm();if(cb)cb()};
 function numToKorean(num){num=Math.floor(Number(num)||0);if(num===0)return '영원';if(num<0)return '마이너스 '+numToKorean(-num);const units=['','만','억','조','경'],digits=['','일','이','삼','사','오','육','칠','팔','구'],small=['','십','백','천'];let r='',ui=0;while(num>0){let chunk=num%10000;if(chunk>0){let cs='',t=chunk,p=0;while(t>0){const d=t%10;if(d>0){const ds=(d===1&&p>0)?'':digits[d];cs=ds+small[p]+cs}t=Math.floor(t/10);p++}r=cs+units[ui]+r}num=Math.floor(num/10000);ui++}return r+'원'}
 function cleanNum(s){return String(s).replace(/[^0-9]/g,'')}
+// 캘린더 셀용 짧은 금액 표기: 1만 미만은 천 단위, 그 이상은 만원 소수1자리(끝0 생략)
+function manUnit(n){
+  n=Math.abs(Math.round(n));
+  if(n<10000){const r=Math.round(n/1000*10)/10;return (Number.isInteger(r)?r:r.toFixed(1))+'천'}
+  const r=Math.round(n/10000*10)/10;
+  return (Number.isInteger(r)?r:r.toFixed(1))+'만';
+}
 function bindComma(elId,hId){const el=g(elId),raw=cleanNum(el.value);el.value=raw===''?'':Number(raw).toLocaleString('ko-KR');g(hId).textContent=raw===''?'':numToKorean(raw)}
 function onAmtInput(){bindComma('m-amt','m-amt-hangul');updateInstallNote()}
 function onAccBalInput(){bindComma('am-bal','am-bal-hangul')}
@@ -564,7 +571,7 @@ function renderCal(){
   const first=new Date(S.year,S.month-1,1).getDay(),days=new Date(S.year,S.month,0).getDate(),ts=todayStr();
   const grid=g('cal-grid');grid.innerHTML='';
   for(let i=0;i<first;i++)grid.innerHTML+=`<div class="cal-cell empty"></div>`;
-  for(let d=1;d<=days;d++){const ds=`${S.year}-${pad(S.month)}-${pad(d)}`,dow=(first+d-1)%7,txns=dateTxns(ds);const dots=txns.slice(0,2).map(t=>{let cl=t.type==='income'?'inc':t.type==='expense'?'exp':t.type==='transfer'?'tf':'vl';let amt=t.type==='valuation'?t.delta:t.amount;let sign=(t.type==='income'||(t.type==='valuation'&&amt>=0))?'+':t.type==='transfer'?'⇄':'-';return `<div class="${cl}">${sign}${Math.abs(Math.round(amt/10000))}만</div>`}).join('');const cls=['cal-cell',ds===ts?'today':'',dow===0?'sun':dow===6?'sat':''].filter(Boolean).join(' ');grid.innerHTML+=`<div class="${cls}" data-date="${ds}"><div class="cal-day-num">${d}</div><div class="cal-dot">${dots}</div></div>`}
+  for(let d=1;d<=days;d++){const ds=`${S.year}-${pad(S.month)}-${pad(d)}`,dow=(first+d-1)%7,txns=dateTxns(ds);const dots=txns.slice(0,2).map(t=>{let cl=t.type==='income'?'inc':t.type==='expense'?'exp':t.type==='transfer'?'tf':'vl';let amt=t.type==='valuation'?t.delta:t.amount;let sign=(t.type==='income'||(t.type==='valuation'&&amt>=0))?'+':t.type==='transfer'?'⇄':'-';return `<div class="${cl}">${sign}${manUnit(Math.abs(amt))}</div>`}).join('');const cls=['cal-cell',ds===ts?'today':'',dow===0?'sun':dow===6?'sat':''].filter(Boolean).join(' ');grid.innerHTML+=`<div class="${cls}" data-date="${ds}"><div class="cal-day-num">${d}</div><div class="cal-dot">${dots}</div></div>`}
   grid.querySelectorAll('.cal-cell[data-date]').forEach(c=>{c.onclick=()=>selectDate(c.dataset.date)});
   const mt=monthTxns();let mi=0,me=0;mt.forEach(t=>{if(t.type==='income')mi+=t.amount;else if(t.type==='expense')me+=t.amount});
   g('cal-inc-sum').textContent=fmt(mi);g('cal-exp-sum').textContent=fmt(me);
@@ -600,6 +607,7 @@ function onValAccChange(){if(S.txnType!=='valuation')return;const acc=S.accounts
 function openModalForDate(ds){S.editingId=null;S.selectedDate=ds;const parts=ds.split('-');g('modal-title').textContent=`거래 추가 — ${parseInt(parts[1])}월 ${parseInt(parts[2])}일`;g('modal-confirm-btn').textContent='추가';g('m-date').value=ds;S.payMethod='cash';g('m-pay').value='cash';g('m-nointerest').checked=true;g('fld-interest').classList.add('hidden');g('m-interest').value='';g('m-months').value=3;updateMemberBtns();setMember('common');setType('expense');g('m-desc').value='';g('m-amt').value='';g('m-amt-hangul').textContent='';g('add-modal').classList.remove('hidden')}
 function editTxn(id){const t=S.transactions.find(x=>x.id===id);if(!t)return;S.editingId=id;const parts=t.date.split('-');g('modal-title').textContent=`거래 수정 — ${parseInt(parts[1])}월 ${parseInt(parts[2])}일`;g('modal-confirm-btn').textContent='저장';g('m-date').value=t.date;updateMemberBtns();setMember(t.member||'common');S.payMethod=(t.paymentMethod==='card_install')?'card_lump':(t.paymentMethod||'cash');g('m-pay').value=S.payMethod;setType(t.type);if(t.type==='income'||t.type==='expense'){setTimeout(()=>{g('m-cat').value=t.category;g('m-acc').value=t.account},0);g('m-desc').value=t.description;g('m-amt').value=Number(t.amount).toLocaleString('ko-KR');g('m-amt-hangul').textContent=numToKorean(t.amount)}else if(t.type==='transfer'){g('m-amt').value=Number(t.amount).toLocaleString('ko-KR');g('m-amt-hangul').textContent=numToKorean(t.amount);setTimeout(()=>{g('m-from').value=t.fromAccount;g('m-to').value=t.toAccount},0)}else if(t.type==='valuation'){setTimeout(()=>{g('m-acc').value=t.account;const acc=S.accounts.find(a=>a.id===t.account);const curExcl=calcAccBal(acc)-t.delta;g('m-amt').value=Number(curExcl+t.delta).toLocaleString('ko-KR');g('m-amt-hangul').textContent=numToKorean(curExcl+t.delta);onValAccChange()},0)}g('add-modal').classList.remove('hidden')}
 function closeModal(){g('add-modal').classList.add('hidden');S.editingId=null}
+function onDateChange(){const ds=g('m-date').value;if(!ds)return;const p=ds.split('-');const pre=S.editingId?'거래 수정':'거래 추가';g('modal-title').textContent=`${pre} — ${parseInt(p[1])}월 ${parseInt(p[2])}일`;S.selectedDate=ds}
 function saveTxn(){
   const date=g('m-date').value,type=S.txnType,member=S.txnMember;if(!date){toast('날짜를 입력하세요');return}
   if(type==='expense'&&S.payMethod==='card_install'&&!S.editingId){
